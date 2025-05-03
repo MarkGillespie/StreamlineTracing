@@ -1,0 +1,24 @@
+Language: Cpp
+AlignConsecutiveAssignments: true
+PointerAlignment: Left
+AlignAfterOpenBracket: Align
+AlignOperands: 'true'
+AllowShortBlocksOnASingleLine: 'false'
+AllowShortIfStatementsOnASingleLine: 'true'
+AllowShortLoopsOnASingleLine: 'true'
+AlwaysBreakTemplateDeclarations: 'true'
+BinPackParameters: 'true'
+BreakBeforeBraces: Attach
+ColumnLimit: '80'
+Cpp11BracedListStyle: 'true'
+IndentWidth: '4'
+KeepEmptyLinesAtTheStartOfBlocks: 'true'
+MaxEmptyLinesToKeep: '2'
+ReflowComments: 'true'
+SpacesInAngles: 'false'
+SpacesInParentheses: 'false'
+SpacesInSquareBrackets: 'false'
+Standard: Cpp11
+UseTab: Never
+
+...
