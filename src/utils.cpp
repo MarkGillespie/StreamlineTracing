@@ -48,6 +48,13 @@ string getFilename(string filePath) {
     return filePath.substr(startInd, filePath.size());
 }
 
+// https://stackoverflow.com/a/874160
+bool endsWith(const std::string& str, const std::string& ending) {
+    return (str.length() >= ending.length()) &&
+           (0 == str.compare(str.length() - ending.length(), ending.length(),
+                             ending));
+}
+
 namespace geometrycentral {
 namespace surface {
 std::pair<std::unique_ptr<ManifoldSurfaceMesh>,

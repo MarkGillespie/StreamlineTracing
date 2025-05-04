@@ -44,6 +44,9 @@ Eigen::Matrix3d outer(const Vector3& v, const Vector3& w); // Returns vw^T
 //== Convenient printing helpers
 string getFilename(string filePath);
 
+// https://stackoverflow.com/a/874160
+bool endsWith(const std::string& str, const std::string& ending);
+
 // Verbose endl
 #define vendl                                                                  \
     "\t\t(" << getFilename(__FILE__) << ":" << __LINE__ << ")" << std::endl
