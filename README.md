@@ -15,7 +15,7 @@ mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 make -j7
-bin/streamline-tracer /path/to/mesh.obj --viz
+bin/trace-streamlines /path/to/mesh.obj --viz
 ```
 
 On Windows, Visual Studio can use the provided CMake files to build and run the project.
@@ -23,7 +23,7 @@ On Windows, Visual Studio can use the provided CMake files to build and run the 
 ## Usage
 You can trace streamlines on triangle meshes by running:
 ```bash
-bin/streamline-tracer /path/to/mesh.obj
+bin/trace-streamlines /path/to/mesh.obj
 ```
 
 The program accepts various arguments to control the vector field generation and streamline tracing:
