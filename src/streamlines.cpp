@@ -246,11 +246,19 @@ inline StreamlineSubResult traceStreamlineInFace(
         std::cout << "      iOppVertEnd: " << iOppVertEnd << std::endl;
     }
 
-    if (crossHe == Halfedge()) {
-        // throw std::logic_error("no halfedge intersection was selected,
-        // precondition problem?");
-        if (TRACE_PRINT) {
-            std::cout << "    PROBLEM PROBLEM NO INTERSECTION:" << std::endl;
+    // if we failed to find a halfedge, or if tRay < 0 (meaning that
+    // vecCartesian pushes us back out of the face in the direction that we came
+    // from), just terminate the streamline
+    if (crossHe == Halfedge() || tRay < 0) {
+        if (crossHe == Halfedge()) {
+            // throw std::logic_error("no halfedge intersection was selected,
+            // precondition problem?");
+            if (TRACE_PRINT) {
+                std::cout << "    PROBLEM PROBLEM NO INTERSECTION:"
+                          << std::endl;
+            }
+        } else if (TRACE_PRINT) {
+            std::cout << "    Bad tRay:" << tRay << std::endl;
         }
 
         // End immediately
