@@ -34,7 +34,7 @@ std::string fieldName = "field.faceField";
 
 // tracing options
 int maxSegments = 150;
-float maxLen    = 1.;
+float maxLen    = 6.;
 
 // svg options
 bool saveSVG = false, saveOBJ = false;
@@ -164,6 +164,7 @@ std::vector<std::vector<SurfacePoint>> traceManyStreamlines(
     PoissonDiskSampler sampler(mesh, geom);
     PoissonDiskOptions pdOpt;
     pdOpt.minDist = minDist;
+
     for (const SurfacePoint& p : sampler.sample(pdOpt)) {
         streamlines.push_back(traceStreamline(mesh, geom, p, field, nSym, opt));
     }

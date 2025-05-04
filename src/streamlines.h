@@ -31,7 +31,7 @@ struct TraceStreamlineOptions {
     double maxLen                  = std::numeric_limits<double>::infinity();
     FaceData<int>* nVisits         = nullptr;
     const FaceData<int>* maxVisits = nullptr;
-    bool verbose                   = false;
+    int verbosity                  = 0;
 };
 extern const TraceStreamlineOptions defaultTraceStreamlineOptions;
 

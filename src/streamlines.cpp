@@ -271,15 +271,25 @@ traceStreamline(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom,
         vStart = rot * vStart;
     }
 
+    if (opt.verbosity > 0) {
+        std::cout << "=== tracing streamline from " << pStart
+                  << " in direction " << vStart << std::endl;
+    }
+
+    bool printSteps = opt.verbosity > 1;
+
     double forwardLength = 0;
     Halfedge heCurr;
     double tCurr, segLength;
     Vector2 vCurr                             = vStart;
     std::tie(heCurr, tCurr, vCurr, segLength) = traceInFaceBarycentric(
-        geom, pStart.face, pStart.faceCoords, vCurr, nSym, vCurr, opt.verbose);
+        geom, pStart.face, pStart.faceCoords, vCurr, nSym, vCurr, printSteps);
     if (nSym > 1 && heCurr != Halfedge())
         vCurr = geom.transportVectorsAcrossHalfedge[heCurr] * vCurr;
     forwardLength += segLength;
+
+    if (opt.verbosity > 0)
+        std::cout << "forwardLength: " << forwardLength << std::endl;
 
     auto should_visit_face = [&](Halfedge he, Vector2 v) {
         if (opt.nVisits && (*opt.nVisits)[heCurr.twin().face()] >=
@@ -289,10 +299,9 @@ traceStreamline(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom,
         return heCurr != Halfedge() && !heCurr.edge().isBoundary();
     };
 
-    int faces_to_print = 0;
     while (should_visit_face(heCurr, vCurr) &&
-           forwardStreamline.size() < opt.maxSegments &&
-           forwardLength < opt.maxLen) {
+           2 * forwardStreamline.size() < opt.maxSegments &&
+           2. * forwardLength < opt.maxLen) {
         //=== step across heCurr to enter heCurr.twin().face()
         if (opt.nVisits) (*opt.nVisits)[heCurr.twin().face()]++;
         forwardStreamline.push_back(SurfacePoint(heCurr, tCurr));
@@ -300,21 +309,24 @@ traceStreamline(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom,
             forwardStreamline.back().inFace(heCurr.twin().face()).faceCoords;
         std::tie(heCurr, tCurr, vCurr, segLength) = traceInFaceBarycentric(
             geom, heCurr.twin().face(), bary,
-            vector_field[heCurr.twin().face()], nSym, vCurr, opt.verbose);
+            vector_field[heCurr.twin().face()], nSym, vCurr, printSteps);
         if (nSym > 1 && heCurr != Halfedge())
             vCurr = geom.transportVectorsAcrossHalfedge[heCurr] * vCurr;
         forwardLength += segLength;
+        if (opt.verbosity > 0)
+            std::cout << "forwardLength: " << forwardLength << std::endl;
     }
 
     vCurr                                     = -vStart;
     double backwardLength                     = 0;
     std::tie(heCurr, tCurr, vCurr, segLength) = traceInFaceBarycentric(
-        geom, pStart.face, pStart.faceCoords, vCurr, nSym, vCurr, opt.verbose);
+        geom, pStart.face, pStart.faceCoords, vCurr, nSym, vCurr, printSteps);
     if (nSym > 1 && heCurr != Halfedge())
         vCurr = geom.transportVectorsAcrossHalfedge[heCurr] * vCurr;
     backwardLength += segLength;
     while (should_visit_face(heCurr, vCurr) &&
-           reverseStreamline.size() < opt.maxSegments) {
+           2 * reverseStreamline.size() < opt.maxSegments &&
+           2. * backwardLength < opt.maxLen) {
         //=== step across heCurr to enter heCurr.twin().face()
         if (opt.nVisits) (*opt.nVisits)[heCurr.twin().face()]++;
         reverseStreamline.push_back(SurfacePoint(heCurr, tCurr));
@@ -322,7 +334,7 @@ traceStreamline(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom,
             reverseStreamline.back().inFace(heCurr.twin().face()).faceCoords;
         std::tie(heCurr, tCurr, vCurr, segLength) = traceInFaceBarycentric(
             geom, heCurr.twin().face(), bary,
-            -vector_field[heCurr.twin().face()], nSym, vCurr, opt.verbose);
+            -vector_field[heCurr.twin().face()], nSym, vCurr, printSteps);
         if (nSym > 1 && heCurr != Halfedge())
             vCurr = geom.transportVectorsAcrossHalfedge[heCurr] * vCurr;
         backwardLength += segLength;
