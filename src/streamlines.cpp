@@ -112,6 +112,23 @@ vertexCoordinatesInTriangle(IntrinsicGeometryInterface& geom, Face face) {
             -geom.halfedgeVectorsInFace[face.halfedge().next().next()]};
 }
 
+// Return type from tracing subroutines, slightly modified from TraceSubResult
+// in trace_geodesic.cpp
+struct StreamlineSubResult {
+    bool terminated;    // Did the trace end?
+    double traceLength; // Length of segment within current face
+
+    // One of the two sets of values will be defined:
+
+    // If the trace continues (terminated == false)
+    Halfedge crossHe; // halfedge we hit (crossHe.twin().face() is new face)
+    double tCross;    // t along crossHe
+    Vector2 traceDir; // direction followed in current face
+
+    // If the trace ends (terminated == true)
+    SurfacePoint endPoint; // ending location
+};
+
 // General form for tracing barycentrically within a face
 // Assumes that approriate projects have already been performed such that
 // startPoint and vectors are valid (inside triangle and pointing in the right
@@ -126,9 +143,10 @@ vertexCoordinatesInTriangle(IntrinsicGeometryInterface& geom, Face face) {
 
 // if nDirections>1, treats vecCartesian as one of the directions in an n-vector
 // field, and searches for the direction closest to oldDirCartesian
-inline std::tuple<Halfedge, double, Vector2, double> traceInFaceBarycentric(
+// std::tuple<Halfedge, double, Vector2, double>
+inline StreamlineSubResult traceStreamlineInFace(
     IntrinsicGeometryInterface& geom, Face face, Vector3 startPoint,
-    Vector2 vecCartesian, size_t nDirections = 1,
+    Vector2 vecCartesian, double remainingLength, size_t nDirections = 1,
     Vector2 oldDirCartesian = Vector2{1, 0}, bool TRACE_PRINT = false) {
 
     if (nDirections > 1) { // find closest direction
@@ -169,6 +187,8 @@ inline std::tuple<Halfedge, double, Vector2, double> traceInFaceBarycentric(
     };
 
     // Gather values
+    double speed = vecCartesian.norm();
+    double tMax  = remainingLength / speed;
     std::array<Vector2, 3> vertexCoords =
         vertexCoordinatesInTriangle(geom, face);
     Vector3 triangleLengths{
@@ -191,8 +211,7 @@ inline std::tuple<Halfedge, double, Vector2, double> traceInFaceBarycentric(
                   << vecCartesian << std::endl;
     }
 
-    // The vector did not end in this triangle. Pick an appropriate point along
-    // some edge
+    // Find first hit along opposite edges
     double tRay      = std::numeric_limits<double>::infinity();
     Halfedge crossHe = Halfedge();
     int iOppVertEnd  = -777;
@@ -235,11 +254,22 @@ inline std::tuple<Halfedge, double, Vector2, double> traceInFaceBarycentric(
         }
 
         // End immediately
-        return std::make_tuple<Halfedge, double, Vector2>(Halfedge(), -1,
-                                                          Vector2::zero(), -1);
+        StreamlineSubResult result;
+        result.terminated = true;
+        result.endPoint   = SurfacePoint(face, startPoint);
+        return result;
     }
 
-    // Compute some useful info about the endpoint
+    // If the hit point happens after tMax, we terminate inside the triangle
+    if (tRay >= tMax) {
+        StreamlineSubResult result;
+        result.terminated  = true;
+        result.endPoint    = SurfacePoint(face, startPoint + tMax * vecBary);
+        result.traceLength = tMax * speed;
+        return result;
+    }
+
+    // Otherwise, compute some useful info about the endpoint
     Vector3 endPointOnEdge = startPoint + tRay * vecBary;
     double tCross          = endPointOnEdge[(iOppVertEnd + 2) % 3] /
                     (endPointOnEdge[(iOppVertEnd + 1) % 3] +
@@ -249,8 +279,14 @@ inline std::tuple<Halfedge, double, Vector2, double> traceInFaceBarycentric(
         std::cout << "    tCross raw: " << tCross << std::endl;
     }
     tCross = clamp(tCross, 0., 1.);
-    return std::make_tuple(crossHe, tCross, vecCartesian,
-                           tRay * vecCartesian.norm());
+
+    StreamlineSubResult result;
+    result.terminated  = false;
+    result.crossHe     = crossHe;
+    result.tCross      = tCross;
+    result.traceDir    = vecCartesian;
+    result.traceLength = tRay * speed;
+    return result;
 }
 
 const TraceStreamlineOptions defaultTraceStreamlineOptions;
@@ -259,7 +295,11 @@ traceStreamline(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom,
                 SurfacePoint pStart, const FaceData<Vector2>& vector_field,
                 size_t nSym, TraceStreamlineOptions opt) {
     std::vector<SurfacePoint> forwardStreamline{pStart}, reverseStreamline;
-    if (opt.nVisits) (*opt.nVisits)[pStart.inSomeFace().face]++;
+
+    // always start inside a face
+    pStart = pStart.inSomeFace();
+
+    if (opt.nVisits) (*opt.nVisits)[pStart.face]++;
 
     if (nSym > 1) geom.requireTransportVectorsAcrossHalfedge();
 
@@ -276,68 +316,92 @@ traceStreamline(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom,
                   << " in direction " << vStart << std::endl;
     }
 
-    bool printSteps = opt.verbosity > 1;
-
     double forwardLength = 0;
-    Halfedge heCurr;
-    double tCurr, segLength;
-    Vector2 vCurr                             = vStart;
-    std::tie(heCurr, tCurr, vCurr, segLength) = traceInFaceBarycentric(
-        geom, pStart.face, pStart.faceCoords, vCurr, nSym, vCurr, printSteps);
+    double forwardLimit  = opt.maxLen / 2.;
+    Vector2 vCurr        = vStart;
+
+    bool printSteps            = opt.verbosity > 1;
+    StreamlineSubResult result = traceStreamlineInFace(
+        geom, pStart.face, pStart.faceCoords, vCurr,
+        forwardLimit - forwardLength, nSym, vCurr, printSteps);
+    forwardLength += result.traceLength;
+
+    // if trace already terminated, grab endpoint. Then heCurr will equal
+    // Halfedge(), so the remaining forward code will be skipped
+    if (result.terminated) forwardStreamline.push_back(result.endPoint);
+
+    Halfedge heCurr = result.crossHe;
+    double tCurr    = result.tCross;
     if (nSym > 1 && heCurr != Halfedge())
         vCurr = geom.transportVectorsAcrossHalfedge[heCurr] * vCurr;
-    forwardLength += segLength;
 
     if (opt.verbosity > 0)
         std::cout << "forwardLength: " << forwardLength << std::endl;
 
     auto should_visit_face = [&](Halfedge he, Vector2 v) {
-        if (opt.nVisits && (*opt.nVisits)[heCurr.twin().face()] >=
-                               (*opt.maxVisits)[heCurr.twin().face()])
-            return false;
+        if (heCurr == Halfedge() || heCurr.edge().isBoundary()) return false;
 
-        return heCurr != Halfedge() && !heCurr.edge().isBoundary();
+        return !opt.nVisits || (*opt.nVisits)[heCurr.twin().face()] <
+                                   (*opt.maxVisits)[heCurr.twin().face()];
     };
 
     while (should_visit_face(heCurr, vCurr) &&
            2 * forwardStreamline.size() < opt.maxSegments &&
-           2. * forwardLength < opt.maxLen) {
+           forwardLength < forwardLimit) {
         //=== step across heCurr to enter heCurr.twin().face()
         if (opt.nVisits) (*opt.nVisits)[heCurr.twin().face()]++;
         forwardStreamline.push_back(SurfacePoint(heCurr, tCurr));
         Vector3 bary =
             forwardStreamline.back().inFace(heCurr.twin().face()).faceCoords;
-        std::tie(heCurr, tCurr, vCurr, segLength) = traceInFaceBarycentric(
-            geom, heCurr.twin().face(), bary,
-            vector_field[heCurr.twin().face()], nSym, vCurr, printSteps);
+        result = traceStreamlineInFace(geom, heCurr.twin().face(), bary,
+                                       vector_field[heCurr.twin().face()],
+                                       forwardLimit - forwardLength, nSym,
+                                       vCurr, printSteps);
+        heCurr = result.crossHe, tCurr = result.tCross;
+        forwardLength += result.traceLength;
+        if (result.terminated) forwardStreamline.push_back(result.endPoint);
+
         if (nSym > 1 && heCurr != Halfedge())
             vCurr = geom.transportVectorsAcrossHalfedge[heCurr] * vCurr;
-        forwardLength += segLength;
         if (opt.verbosity > 0)
             std::cout << "forwardLength: " << forwardLength << std::endl;
     }
 
-    vCurr                                     = -vStart;
-    double backwardLength                     = 0;
-    std::tie(heCurr, tCurr, vCurr, segLength) = traceInFaceBarycentric(
-        geom, pStart.face, pStart.faceCoords, vCurr, nSym, vCurr, printSteps);
+    vCurr                 = -vStart;
+    double backwardLength = 0;
+    double backwardLimit  = opt.maxLen - forwardLength;
+    result = traceStreamlineInFace(geom, pStart.face, pStart.faceCoords, vCurr,
+                                   backwardLimit - backwardLength, nSym, vCurr,
+                                   printSteps);
+    heCurr = result.crossHe, tCurr = result.tCross;
+    backwardLength += result.traceLength;
+
+    // if trace already terminated, grab endpoint. Then heCurr will equal
+    // Halfedge(), so the remaining backward code will be skipped
+    if (result.terminated) reverseStreamline.push_back(result.endPoint);
+
+
     if (nSym > 1 && heCurr != Halfedge())
         vCurr = geom.transportVectorsAcrossHalfedge[heCurr] * vCurr;
-    backwardLength += segLength;
     while (should_visit_face(heCurr, vCurr) &&
-           2 * reverseStreamline.size() < opt.maxSegments &&
-           2. * backwardLength < opt.maxLen) {
+           forwardStreamline.size() + reverseStreamline.size() <
+               opt.maxSegments &&
+           backwardLength < backwardLimit) {
         //=== step across heCurr to enter heCurr.twin().face()
         if (opt.nVisits) (*opt.nVisits)[heCurr.twin().face()]++;
         reverseStreamline.push_back(SurfacePoint(heCurr, tCurr));
         Vector3 bary =
             reverseStreamline.back().inFace(heCurr.twin().face()).faceCoords;
-        std::tie(heCurr, tCurr, vCurr, segLength) = traceInFaceBarycentric(
-            geom, heCurr.twin().face(), bary,
-            -vector_field[heCurr.twin().face()], nSym, vCurr, printSteps);
+        result = traceStreamlineInFace(geom, heCurr.twin().face(), bary,
+                                       -vector_field[heCurr.twin().face()],
+                                       backwardLimit - backwardLength, nSym,
+                                       vCurr, printSteps);
+        heCurr = result.crossHe, tCurr = result.tCross;
+        backwardLength += result.traceLength;
+        if (result.terminated) reverseStreamline.push_back(result.endPoint);
+
         if (nSym > 1 && heCurr != Halfedge())
             vCurr = geom.transportVectorsAcrossHalfedge[heCurr] * vCurr;
-        backwardLength += segLength;
     }
 
     std::vector<SurfacePoint> streamline;

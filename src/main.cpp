@@ -160,6 +160,7 @@ std::vector<std::vector<SurfacePoint>> traceManyStreamlines(
     TraceStreamlineOptions opt = defaultTraceStreamlineOptions) {
     std::vector<std::vector<SurfacePoint>> streamlines;
 
+
     // generate Poisson disk samples to trace from
     PoissonDiskSampler sampler(mesh, geom);
     PoissonDiskOptions pdOpt;
