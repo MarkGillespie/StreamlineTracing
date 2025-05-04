@@ -5,7 +5,7 @@
 [submodule "deps/geometry-central"]
 	path = deps/geometry-central
 	url = git@github.com:MarkGillespie/geometry-central.git
-	branch = master
+	branch = StreamlineTracing
 [submodule "deps/googletest"]
 	path = deps/googletest
 	url = git@github.com:google/googletest

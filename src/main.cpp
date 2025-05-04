@@ -1,7 +1,7 @@
 #include "geometrycentral/surface/direction_fields.h"
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/meshio.h"
-#include "geometrycentral/surface/poisson_disk_sampler.h"
+#include "geometrycentral/surface/streamlines.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
 
 #include "polyscope/curve_network.h"
@@ -13,8 +13,6 @@
 #include "imgui.h"
 
 #include "utils.h"
-
-#include "streamlines.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -154,29 +152,9 @@ void writeCurvesToOBJ(ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom,
     }
 }
 
-std::vector<std::vector<SurfacePoint>> traceManyStreamlines(
-    ManifoldSurfaceMesh& mesh, VertexPositionGeometry& geom,
-    const FaceData<Vector2>& field, size_t nSym = 1,
-    TraceStreamlineOptions opt = defaultTraceStreamlineOptions) {
-    std::vector<std::vector<SurfacePoint>> streamlines;
-
-
-    // generate Poisson disk samples to trace from
-    PoissonDiskSampler sampler(mesh, geom);
-    PoissonDiskOptions pdOpt;
-    pdOpt.minDist = minDist;
-
-    for (const SurfacePoint& p : sampler.sample(pdOpt)) {
-        streamlines.push_back(traceStreamline(mesh, geom, p, field, nSym, opt));
-    }
-    return streamlines;
-}
-
-
 polyscope::SurfaceFaceTangentVectorQuantity* generateFaceField() {
     faceField = computeSmoothestFaceDirectionField(*geom, nSym);
-    for (Face f : mesh->faces())
-        faceField[f] = faceField[f].pow(1. / (double)nSym);
+    for (Face f : mesh->faces()) faceField[f] = faceField[f].pow(1. / nSym);
 
     if (saveField) writeFaceField(*mesh, *geom, faceField, fieldName);
 
@@ -304,11 +282,14 @@ void myCallback() {
     }
     if (ImGui::Button("Trace many streamlines")) {
         if (faceField.size() == 0) generateFaceField();
-        TraceStreamlineOptions opt = defaultTraceStreamlineOptions;
-        opt.maxSegments            = maxSegments;
-        opt.maxLen                 = maxLen;
+        TraceStreamlineOptions opt;
+        opt.maxSegments = maxSegments;
+        opt.maxLen      = maxLen;
+        PoissonDiskOptions pdOpt;
+        pdOpt.minDist = minDist;
         std::vector<std::vector<SurfacePoint>> streamlines =
-            traceManyStreamlines(*mesh, *geom, faceField, size_t(nSym), opt);
+            traceManyStreamlines(*mesh, *geom, faceField, size_t(nSym), opt,
+                                 pdOpt);
         drawCurves("streamlines", *mesh, *geom, streamlines);
         if (saveOBJ) {
             writeCurvesToOBJ(*mesh, *geom, streamlines, objName);
@@ -508,12 +489,14 @@ int main(int argc, char** argv) {
             drawFaceField(*psMesh, "smooth direction field", *mesh, *geom,
                           faceField);
 
-            TraceStreamlineOptions opt = defaultTraceStreamlineOptions;
-            opt.maxSegments            = maxSegments;
-            opt.maxLen                 = maxLen;
+            TraceStreamlineOptions opt;
+            opt.maxSegments = maxSegments;
+            opt.maxLen      = maxLen;
+            PoissonDiskOptions pdOpt;
+            pdOpt.minDist = minDist;
             std::vector<std::vector<SurfacePoint>> streamlines =
-                traceManyStreamlines(*mesh, *geom, faceField, size_t(nSym),
-                                     opt);
+                traceManyStreamlines(*mesh, *geom, faceField, size_t(nSym), opt,
+                                     pdOpt);
             drawCurves("streamlines", *mesh, *geom, streamlines);
             if (saveOBJ) {
                 writeCurvesToOBJ(*mesh, *geom, streamlines, objName);
@@ -540,11 +523,14 @@ int main(int argc, char** argv) {
         polyscope::show();
     } else {
         if (faceField.size() == 0) generateFaceField();
-        TraceStreamlineOptions opt = defaultTraceStreamlineOptions;
-        opt.maxSegments            = maxSegments;
-        opt.maxLen                 = maxLen;
+        TraceStreamlineOptions opt;
+        opt.maxSegments = maxSegments;
+        opt.maxLen      = maxLen;
+        PoissonDiskOptions pdOpt;
+        pdOpt.minDist = minDist;
         std::vector<std::vector<SurfacePoint>> streamlines =
-            traceManyStreamlines(*mesh, *geom, faceField, size_t(nSym), opt);
+            traceManyStreamlines(*mesh, *geom, faceField, size_t(nSym), opt,
+                                 pdOpt);
         if (saveOBJ) {
             writeCurvesToOBJ(*mesh, *geom, streamlines, objName);
         }

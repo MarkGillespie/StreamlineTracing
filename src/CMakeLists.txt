@@ -8,7 +8,7 @@ endif()
 add_executable(
   trace-streamlines
   main.cpp
-  streamlines.cpp
+  # streamlines.cpp
   utils.cpp
 )
 target_include_directories(trace-streamlines PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../deps/")
