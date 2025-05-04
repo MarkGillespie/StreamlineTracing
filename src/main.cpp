@@ -502,9 +502,37 @@ int main(int argc, char** argv) {
             polyscope::guessNiceNameFromPath(filename), geom->vertexPositions,
             mesh->getFaceVertexList(), polyscopePermutations(*mesh));
 
-        if (inputFieldArg)
+        if (inputFieldArg) {
             drawFaceField(*psMesh, "smooth direction field", *mesh, *geom,
                           faceField);
+
+            TraceStreamlineOptions opt = defaultTraceStreamlineOptions;
+            opt.maxSegments            = maxSegments;
+            opt.maxLen                 = maxLen;
+            std::vector<std::vector<SurfacePoint>> streamlines =
+                traceManyStreamlines(*mesh, *geom, faceField, size_t(nSym),
+                                     opt);
+            drawCurves("streamlines", *mesh, *geom, streamlines);
+            if (saveOBJ) {
+                writeCurvesToOBJ(*mesh, *geom, streamlines, objName);
+            }
+            if (saveSVG) {
+                if (!loadedParam) {
+                    std::cout
+                        << "ERROR: cannot write streamlines to SVG because "
+                           "mesh does not have UV coordinates"
+                        << std::endl;
+                } else {
+                    SvgCurveOptions svgOpt;
+                    svgOpt.worldspaceStrokeWidth = worldspaceStrokeWidth;
+                    svgOpt.backgroundColor       = rgbaToHex(svgBackground);
+                    svgOpt.curveColor            = rgbaToHex(svgForeground);
+                    svgOpt.imageSize             = imageSize;
+                    draw_mesh_curves_to_svg(*mesh, *geom, uv, streamlines,
+                                            svgName, svgOpt);
+                }
+            }
+        }
 
         // Give control to the polyscope gui
         polyscope::show();
